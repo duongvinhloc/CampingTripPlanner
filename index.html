@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camping Trip Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="login-screen" class="login-screen">
+  <form id="login-form" class="login-card">
+    <div class="login-icon">🏕️</div>
+    <h1>Camping Trip Planner</h1>
+    <p class="login-sub">Nhập mật khẩu chung của nhóm để tiếp tục</p>
+    <input type="password" id="login-password" placeholder="Mật khẩu" required autocomplete="current-password">
+    <button type="submit">Đăng nhập</button>
+    <p id="login-error" class="login-error" hidden>Sai mật khẩu, thử lại nhé.</p>
+  </form>
+</div>
+
+<div id="app-root" hidden>
+
+<header class="app-header">
+  <h1>🏕️ Camping Trip Planner</h1>
+  <div class="header-actions">
+    <span id="status-indicator" class="status-indicator">Đang tải...</span>
+    <button id="refresh-btn" title="Tải lại dữ liệu">⟳ Làm mới</button>
+    <button id="logout-btn" title="Đăng xuất">Đăng xuất</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="tasks">✅ Chuẩn bị đồ</button>
+  <button class="tab-btn" data-tab="expenses">💸 Chia tiền</button>
+  <button class="tab-btn" data-tab="members">👥 Thành viên</button>
+</nav>
+
+<main>
+  <!-- TAB: TASKS -->
+  <section id="tab-tasks" class="tab-panel active">
+    <form id="task-form" class="card form-row">
+      <input type="text" id="task-group" list="task-group-list" placeholder="Nhóm việc (VD: Đồ ăn)">
+      <datalist id="task-group-list">
+        <option value="Lều & ngủ nghỉ">
+        <option value="Đồ ăn & nước uống">
+        <option value="Nấu nướng">
+        <option value="Di chuyển">
+        <option value="Giải trí">
+        <option value="Khác">
+      </datalist>
+      <input type="text" id="task-name" placeholder="Hạng mục (VD: Mang lều)" required>
+      <select id="task-assignee"></select>
+      <input type="number" id="task-quantity" placeholder="Số lượng" min="0" step="1">
+      <input type="text" id="task-note" placeholder="Ghi chú (không bắt buộc)">
+      <button type="submit">+ Thêm hạng mục</button>
+    </form>
+
+    <div class="card">
+      <div class="filter-bar">
+        <label for="task-filter-assignee">Lọc theo người phụ trách</label>
+        <select id="task-filter-assignee"></select>
+      </div>
+      <table id="task-table">
+        <thead>
+          <tr>
+            <th>Nhóm</th>
+            <th>Hạng mục</th>
+            <th>Người phụ trách</th>
+            <th>Số lượng</th>
+            <th>Trạng thái</th>
+            <th>Ghi chú</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="task-tbody"></tbody>
+      </table>
+      <p id="task-empty" class="empty-msg" hidden>Chưa có công việc nào. Thêm việc đầu tiên ở trên nhé!</p>
+    </div>
+  </section>
+
+  <!-- TAB: EXPENSES -->
+  <section id="tab-expenses" class="tab-panel">
+    <form id="expense-form" class="card form-grid">
+      <input type="text" id="exp-desc" placeholder="Khoản chi (VD: Đổ xăng, mua đồ ăn)" required>
+      <input type="number" id="exp-amount" placeholder="Số tiền" min="0" step="1" required>
+      <select id="exp-payer" required></select>
+      <div id="exp-participants" class="checkbox-group"></div>
+      <button type="submit">+ Thêm khoản chi</button>
+    </form>
+
+    <div class="card">
+      <table id="expense-table">
+        <thead>
+          <tr>
+            <th>Khoản chi</th>
+            <th>Số tiền</th>
+            <th>Người trả</th>
+            <th>Chia cho</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="expense-tbody"></tbody>
+      </table>
+      <p id="expense-empty" class="empty-msg" hidden>Chưa có khoản chi nào.</p>
+    </div>
+
+    <div class="card">
+      <h2>📊 Số dư mỗi người</h2>
+      <table id="balance-table">
+        <thead><tr><th>Thành viên</th><th>Đã trả</th><th>Phải chịu</th><th>Số dư</th></tr></thead>
+        <tbody id="balance-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>🤝 Ai cần trả ai</h2>
+      <ul id="settlement-list"></ul>
+      <p id="settlement-empty" class="empty-msg" hidden>Mọi người đã huề nhau 🎉</p>
+    </div>
+  </section>
+
+  <!-- TAB: MEMBERS -->
+  <section id="tab-members" class="tab-panel">
+    <form id="member-form" class="card form-row">
+      <input type="text" id="member-name" placeholder="Tên thành viên" required>
+      <button type="submit">+ Thêm thành viên</button>
+    </form>
+    <div class="card">
+      <ul id="member-list" class="member-list"></ul>
+      <p id="member-empty" class="empty-msg" hidden>Chưa có thành viên nào. Thêm ở trên để bắt đầu.</p>
+    </div>
+  </section>
+</main>
+
+</div>
+
+<script src="config.js"></script>
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
