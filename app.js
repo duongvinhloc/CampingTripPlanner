@@ -15,7 +15,6 @@ function setStatus(text) {
   document.getElementById('status-indicator').textContent = text;
 }
 
-// ---------- Đăng nhập (1 mật khẩu chung cho cả nhóm) ----------
 let pollTimer = null;
 
 function startPolling() {
@@ -23,60 +22,7 @@ function startPolling() {
   pollTimer = setInterval(loadAll, POLL_INTERVAL_MS);
 }
 
-//function stopPolling() {
- // clearInterval(pollTimer);
- // pollTimer = null;
-//}
-
-//function showLogin(message) {
-//  document.getElementById('app-root').hidden = true;
-//  document.getElementById('login-screen').hidden = false;
-//  const err = document.getElementById('login-error');
-//  err.hidden = !message;
-//  err.textContent = message || '';
-//}
-
-//function showApp() {
- // document.getElementById('login-screen').hidden = true;
-//  document.getElementById('app-root').hidden = false;
-//}
-
-//document.getElementById('login-form').addEventListener('submit', async (e) => {
-//  e.preventDefault();
-//  const pwInput = document.getElementById('login-password');
-//  sessionStorage.setItem(AUTH_STORAGE_KEY, pwInput.value);
-//  try {
-//    await api.list('Members');
-//  } catch (err) {
-//    sessionStorage.removeItem(AUTH_STORAGE_KEY);
-//    showLogin('Sai mật khẩu, thử lại nhé.');
- //   return;
-//  }
-//  pwInput.value = '';
-//  showApp();
-//  await loadAll();
-//  startPolling();
-//});
-
-//document.getElementById('logout-btn').addEventListener('click', () => {
-//  sessionStorage.removeItem(AUTH_STORAGE_KEY);
-//  stopPolling();
-//  showLogin();
-//});
-
 async function init() {
- // if (!sessionStorage.getItem(AUTH_STORAGE_KEY)) {
-//    showLogin();
-//    return;
-//  }
-//  try {
-//    await api.list('Members');
-//  } catch (err) {
-//    sessionStorage.removeItem(AUTH_STORAGE_KEY);
-//    showLogin();
- //   return;
-//  }
-  showApp();
   await loadAll();
   startPolling();
 }
@@ -111,12 +57,6 @@ async function loadAll() {
     setStatus('Đã cập nhật ' + new Date().toLocaleTimeString('vi-VN'));
   } catch (err) {
     console.error(err);
-    if (err.message === 'Unauthorized') {
-      sessionStorage.removeItem(AUTH_STORAGE_KEY);
-      stopPolling();
-      showLogin('Sai mật khẩu hoặc đã hết hạn, hãy đăng nhập lại.');
-      return;
-    }
     setStatus('Lỗi tải dữ liệu — kiểm tra config.js');
   }
 }
