@@ -335,26 +335,5 @@ function escapeHtml(str) {
   }[c]));
 }
 
-// ---------- Mã truy cập (chỉ để đỡ nhìn thấy dữ liệu tình cờ, không phải bảo mật thật) ----------
-const ACCESS_CODE = 'camp20260808';
-const ACCESS_STORAGE_KEY = 'campingAppAccess';
-
-function unlockGate() {
-  document.getElementById('gate').remove();
-  init();
-}
-
-if (sessionStorage.getItem(ACCESS_STORAGE_KEY) === ACCESS_CODE) {
-  unlockGate();
-} else {
-  document.getElementById('gate-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const code = document.getElementById('gate-code').value;
-    if (code === ACCESS_CODE) {
-      sessionStorage.setItem(ACCESS_STORAGE_KEY, code);
-      unlockGate();
-    } else {
-      alert('Sai mã, thử lại nhé.');
-    }
-  });
-}
+// ---------- Init ----------
+init();
