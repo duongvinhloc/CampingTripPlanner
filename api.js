@@ -1,28 +1,40 @@
 // Lớp giao tiếp với Apps Script Web App (đóng vai trò database qua Google Sheets).
 
-// Mật khẩu chung của nhóm, chỉ lưu trong sessionStorage (mất khi đóng tab/trình duyệt).
-const AUTH_STORAGE_KEY = 'campingAppPassword';
-
-function getAuthPassword() {
-  return sessionStorage.getItem(AUTH_STORAGE_KEY) || '';
+// Apps Script /exec redirect qua 1 URL echo tạm; dưới tải (nhiều request cùng lúc) URL đó
+// đôi khi 404 và trả về trang lỗi HTML thay vì JSON. Lỗi này chỉ là tạm thời nên retry là đủ.
+async function fetchJson_(url, options, retries = 2) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new Error(`Phản hồi không phải JSON (status ${res.status})`);
+      }
+      return json;
+    } catch (err) {
+      if (attempt >= retries) throw err;
+      await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+    }
+  }
 }
 
 async function apiList(sheetName) {
-  const url = `${APPS_SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}&password=${encodeURIComponent(getAuthPassword())}`;
-  const res = await fetch(url);
-  const json = await res.json();
+  const url = `${APPS_SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`;
+  const json = await fetchJson_(url);
   if (json.error) throw new Error(json.error);
   return json.data;
 }
 
 async function apiPost(payload) {
   // Content-Type text/plain tránh browser gửi CORS preflight (Apps Script không xử lý OPTIONS).
-  const res = await fetch(APPS_SCRIPT_URL, {
+  const json = await fetchJson_(APPS_SCRIPT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ ...payload, password: getAuthPassword() }),
+    body: JSON.stringify(payload),
   });
-  const json = await res.json();
   if (json.error) throw new Error(json.error);
   return json;
 }
