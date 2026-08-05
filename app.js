@@ -38,14 +38,18 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ---------- Load ----------
+let isLoading = false;
+
 async function loadAll() {
+  if (isLoading) return; // tránh chồng lấp khi vòng poll trước chưa xong
+  isLoading = true;
   setStatus('Đang tải...');
   try {
-    [members, tasks, expenses] = await Promise.all([
-      api.list('Members'),
-      api.list('Tasks'),
-      api.list('Expenses'),
-    ]);
+    // Gọi tuần tự (không Promise.all) để giảm số request đồng thời tới Apps Script,
+    // nguồn gây lỗi 404 echo khi nhiều request cùng lúc đè lên 1 deployment.
+    members = await api.list('Members');
+    tasks = await api.list('Tasks');
+    expenses = await api.list('Expenses');
     renderMembers();
     renderTaskAssigneeOptions();
     renderTaskFilterOptions();
@@ -58,6 +62,8 @@ async function loadAll() {
   } catch (err) {
     console.error(err);
     setStatus('Lỗi tải dữ liệu — kiểm tra config.js');
+  } finally {
+    isLoading = false;
   }
 }
 
@@ -338,5 +344,4 @@ function escapeHtml(str) {
   }[c]));
 }
 
-// ---------- Init ----------
 init();
