@@ -221,6 +221,7 @@ function renderExpenses() {
       <td data-label="Số tiền">${fmtMoney(x.amount)}</td>
       <td data-label="Người trả">${escapeHtml(x.payer)}</td>
       <td data-label="Chia cho">${escapeHtml(x.participants)}</td>
+      <td data-label="Ghi chú">${escapeHtml(x.note)}</td>
       <td></td>
     `;
     const delBtn = document.createElement('button');
@@ -231,7 +232,7 @@ function renderExpenses() {
       await api.remove('Expenses', x.id);
       await loadAll();
     });
-    tr.children[4].appendChild(delBtn);
+    tr.children[5].appendChild(delBtn);
     tbody.appendChild(tr);
   });
 }
@@ -242,6 +243,7 @@ document.getElementById('expense-form').addEventListener('submit', async (e) => 
   const amount = Number(document.getElementById('exp-amount').value);
   const payer = document.getElementById('exp-payer').value;
   const participants = Array.from(document.querySelectorAll('#exp-participants input:checked')).map(cb => cb.value);
+  const note = document.getElementById('exp-note').value.trim();
   if (!description || !amount || !payer || participants.length === 0) {
     alert('Vui lòng điền đủ thông tin và chọn ít nhất 1 người chia tiền.');
     return;
@@ -251,6 +253,7 @@ document.getElementById('expense-form').addEventListener('submit', async (e) => 
     amount,
     payer,
     participants: participants.join(', '),
+    note,
     date: new Date().toISOString().slice(0, 10),
   });
   e.target.reset();
