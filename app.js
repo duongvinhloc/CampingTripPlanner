@@ -5,7 +5,9 @@ let expenses = [];
 let taskFilterAssignee = '';
 const UNASSIGNED_FILTER_VALUE = '__unassigned__';
 
-const POLL_INTERVAL_MS = 15000;
+// Poll version (rẻ, chỉ 1 số) thường xuyên hơn hẳn; chỉ tải lại toàn bộ data khi version đổi.
+const VERSION_POLL_INTERVAL_MS = 4000;
+let lastVersion = null;
 
 function fmtMoney(n) {
   return '¥' + Math.round(Number(n) || 0).toLocaleString('ja-JP');
@@ -16,15 +18,46 @@ function setStatus(text) {
 }
 
 let pollTimer = null;
+let isCheckingVersion = false;
+
+async function checkVersion() {
+  if (isCheckingVersion || isLoading) return;
+  isCheckingVersion = true;
+  try {
+    const v = await api.version();
+    if (lastVersion !== null && v !== lastVersion) {
+      await loadAll();
+    }
+    lastVersion = v;
+  } catch (err) {
+    // Lỗi mạng tạm thời — bỏ qua, vòng poll version sau sẽ thử lại.
+    console.error(err);
+  } finally {
+    isCheckingVersion = false;
+  }
+}
 
 function startPolling() {
   if (pollTimer) return;
-  pollTimer = setInterval(loadAll, POLL_INTERVAL_MS);
+  pollTimer = setInterval(checkVersion, VERSION_POLL_INTERVAL_MS);
 }
 
 async function init() {
   await loadAll();
+  try {
+    lastVersion = await api.version();
+  } catch (err) {
+    console.error(err);
+  }
   startPolling();
+}
+
+// Sau khi tự mình thêm/sửa/xoá, cập nhật lastVersion từ version Apps Script vừa trả về
+// (nếu có) để vòng checkVersion tiếp theo không tải lại data một lần thừa.
+function syncVersionFrom_(result) {
+  if (result && typeof result.version === 'number') {
+    lastVersion = result.version;
+  }
 }
 
 // ---------- Tabs ----------
@@ -83,7 +116,7 @@ function renderMembers() {
     delBtn.className = 'row-delete';
     delBtn.addEventListener('click', async () => {
       if (!confirm(`Xoá thành viên "${m.name}"?`)) return;
-      await api.remove('Members', m.id);
+      syncVersionFrom_(await api.remove('Members', m.id));
       await loadAll();
     });
     li.appendChild(delBtn);
@@ -96,7 +129,7 @@ document.getElementById('member-form').addEventListener('submit', async (e) => {
   const nameInput = document.getElementById('member-name');
   const name = nameInput.value.trim();
   if (!name) return;
-  await api.add('Members', { name });
+  syncVersionFrom_(await api.add('Members', { name }));
   nameInput.value = '';
   await loadAll();
 });
@@ -162,7 +195,7 @@ function renderTasks() {
       statusSelect.appendChild(opt);
     });
     statusSelect.addEventListener('change', async () => {
-      await api.update('Tasks', t.id, { status: statusSelect.value });
+      syncVersionFrom_(await api.update('Tasks', t.id, { status: statusSelect.value }));
       await loadAll();
     });
     tr.children[4].appendChild(statusSelect);
@@ -172,7 +205,7 @@ function renderTasks() {
     delBtn.className = 'row-delete';
     delBtn.addEventListener('click', async () => {
       if (!confirm(`Xoá hạng mục "${t.task}"?`)) return;
-      await api.remove('Tasks', t.id);
+      syncVersionFrom_(await api.remove('Tasks', t.id));
       await loadAll();
     });
     tr.children[6].appendChild(delBtn);
@@ -189,7 +222,7 @@ document.getElementById('task-form').addEventListener('submit', async (e) => {
   const quantity = document.getElementById('task-quantity').value.trim();
   const note = document.getElementById('task-note').value.trim();
   if (!task) return;
-  await api.add('Tasks', { group, task, assignee, quantity, note, status: 'todo' });
+  syncVersionFrom_(await api.add('Tasks', { group, task, assignee, quantity, note, status: 'todo' }));
   e.target.reset();
   await loadAll();
 });
@@ -235,7 +268,7 @@ function renderExpenses() {
     delBtn.className = 'row-delete';
     delBtn.addEventListener('click', async () => {
       if (!confirm(`Xoá khoản chi "${x.description}"?`)) return;
-      await api.remove('Expenses', x.id);
+      syncVersionFrom_(await api.remove('Expenses', x.id));
       await loadAll();
     });
     tr.children[5].appendChild(delBtn);
@@ -254,14 +287,14 @@ document.getElementById('expense-form').addEventListener('submit', async (e) => 
     alert('Vui lòng điền đủ thông tin và chọn ít nhất 1 người chia tiền.');
     return;
   }
-  await api.add('Expenses', {
+  syncVersionFrom_(await api.add('Expenses', {
     description,
     amount,
     payer,
     participants: participants.join(', '),
     note,
     date: new Date().toISOString().slice(0, 10),
-  });
+  }));
   e.target.reset();
   await loadAll();
 });
