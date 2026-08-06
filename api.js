@@ -39,9 +39,19 @@ async function apiPost(payload) {
   return json;
 }
 
+// Trả về 1 số "version" tăng mỗi lần có add/update/delete — rẻ hơn hẳn so với tải lại
+// toàn bộ data, dùng để biết có cần đồng bộ lại hay không.
+async function apiVersion() {
+  const url = `${APPS_SCRIPT_URL}?action=version`;
+  const json = await fetchJson_(url);
+  if (json.error) throw new Error(json.error);
+  return json.version;
+}
+
 const api = {
   list: (sheet) => apiList(sheet),
   add: (sheet, data) => apiPost({ sheet, action: 'add', data }),
   update: (sheet, id, data) => apiPost({ sheet, action: 'update', id, data }),
   remove: (sheet, id) => apiPost({ sheet, action: 'delete', id }),
+  version: () => apiVersion(),
 };
