@@ -4,6 +4,7 @@ let tasks = [];
 let expenses = [];
 let taskFilterAssignee = '';
 const UNASSIGNED_FILTER_VALUE = '__unassigned__';
+const UNASSIGNED_LABEL = 'Chưa phân công';
 
 // Poll version (rẻ, chỉ 1 số) thường xuyên hơn hẳn; chỉ tải lại toàn bộ data khi version đổi.
 const VERSION_POLL_INTERVAL_MS = 4000;
@@ -87,6 +88,7 @@ async function loadAll() {
     renderTaskAssigneeOptions();
     renderTaskFilterOptions();
     renderTasks();
+    renderTaskProgress();
     renderExpensePayerOptions();
     renderExpenseParticipantOptions();
     renderExpenses();
@@ -157,6 +159,46 @@ document.getElementById('task-filter-assignee').addEventListener('change', (e) =
   taskFilterAssignee = e.target.value;
   renderTasks();
 });
+
+// ---------- Tiến độ theo người ----------
+function renderTaskProgress() {
+  const container = document.getElementById('progress-list');
+  const empty = document.getElementById('progress-empty');
+  container.innerHTML = '';
+
+  const stats = new Map(); // tên -> { total, done, doing, todo }
+  members.forEach(m => stats.set(m.name, { total: 0, done: 0, doing: 0, todo: 0 }));
+  tasks.forEach(t => {
+    const key = t.assignee || UNASSIGNED_LABEL;
+    if (!stats.has(key)) stats.set(key, { total: 0, done: 0, doing: 0, todo: 0 });
+    const s = stats.get(key);
+    s.total++;
+    s[t.status || 'todo']++;
+  });
+
+  const order = [...members.map(m => m.name), UNASSIGNED_LABEL];
+  const rows = order
+    .filter(name => stats.has(name) && stats.get(name).total > 0)
+    .map(name => ({ name, ...stats.get(name) }));
+
+  empty.hidden = rows.length > 0;
+
+  rows.forEach(row => {
+    const percent = Math.round((row.done / row.total) * 100);
+    const div = document.createElement('div');
+    div.className = 'progress-item';
+    div.innerHTML = `
+      <div class="progress-item-header">
+        <span class="progress-name">${escapeHtml(row.name)}</span>
+        <span class="progress-count">${row.done}/${row.total} xong${row.doing ? ` · ${row.doing} đang làm` : ''}</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" style="width:${percent}%"></div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
 
 function renderTasks() {
   const tbody = document.getElementById('task-tbody');
