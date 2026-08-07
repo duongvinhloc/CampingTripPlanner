@@ -51,97 +51,6 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
-#gate {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-}
-
-#gate-form {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 32px;
-  background: var(--card-bg);
-  border-radius: 20px;
-  box-shadow: var(--shadow);
-}
-
-.gate-icon { font-size: 2.4rem; }
-
-#gate-code { text-align: center; }
-
-.login-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
-  padding: 24px;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-}
-
-.login-screen:not([hidden]) {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.login-card {
-  background: var(--card-bg);
-  border-radius: 20px;
-  padding: 32px 28px;
-  width: 100%;
-  max-width: 340px;
-  text-align: center;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-  animation: fade-in 0.18s ease;
-}
-
-.login-icon { font-size: 2.4rem; margin-bottom: 6px; }
-
-.login-card h1 {
-  margin: 0 0 6px;
-  font-size: 1.25rem;
-  color: var(--text);
-}
-
-.login-sub {
-  margin: 0 0 18px;
-  font-size: 0.88rem;
-  color: var(--muted);
-}
-
-.login-card input {
-  width: 100%;
-  margin-bottom: 12px;
-}
-
-.login-card button { width: 100%; }
-
-.login-error {
-  margin: 12px 0 0;
-  font-size: 0.85rem;
-  color: var(--danger);
-  font-weight: 600;
-}
-
-#logout-btn {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 999px;
-  padding: 7px 14px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: background 0.15s ease;
-}
-#logout-btn:hover { background: rgba(255, 255, 255, 0.32); }
 
 .app-header {
   display: flex;
@@ -322,6 +231,35 @@ button:active { transform: scale(0.98); }
 }
 
 .filter-bar select { min-width: 180px; }
+
+.progress-list { display: flex; flex-direction: column; gap: 14px; }
+
+.progress-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.progress-name { font-weight: 600; }
+.progress-count { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
+
+.progress-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--bg-accent);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(120deg, var(--primary) 0%, var(--accent) 100%);
+  transition: width 0.25s ease;
+}
 
 table { width: 100%; border-collapse: collapse; }
 
