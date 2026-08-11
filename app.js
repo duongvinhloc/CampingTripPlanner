@@ -423,8 +423,11 @@ function renderExpenseBreakdown() {
   const totalAmount = expenses.reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
   document.getElementById('expense-total').textContent = fmtMoney(totalAmount);
 
-  const { fullGroupExpenses, totalIndividuals, avgPerPerson } = fullGroupStats();
+  const { fullGroupExpenses, totalFullGroupAmount, totalIndividuals, avgPerPerson } = fullGroupStats();
   const partialExpenses = expensesNewestFirst().filter(x => !isFullGroupExpense(x));
+  const totalPartialAmount = partialExpenses.reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+  document.getElementById('expense-total-full').textContent = fmtMoney(totalFullGroupAmount);
+  document.getElementById('expense-total-partial').textContent = fmtMoney(totalPartialAmount);
 
   const avgLine = document.getElementById('full-group-avg-tile');
   avgLine.hidden = fullGroupExpenses.length === 0 || totalIndividuals === 0;
@@ -453,14 +456,21 @@ function renderExpenseBreakdown() {
 // ---------- Balances & Settlement ----------
 function renderBalances() {
   const paid = {};
+  const paidFullGroup = {};
+  const paidPartial = {};
   const owed = {};
-  members.forEach(m => { paid[m.name] = 0; owed[m.name] = 0; });
+  members.forEach(m => { paid[m.name] = 0; paidFullGroup[m.name] = 0; paidPartial[m.name] = 0; owed[m.name] = 0; });
 
   expenses.forEach(x => {
     const amount = Number(x.amount) || 0;
     const participants = participantsOf(x);
     if (paid[x.payer] === undefined) paid[x.payer] = 0;
     paid[x.payer] += amount;
+    if (isFullGroupExpense(x)) {
+      paidFullGroup[x.payer] = (paidFullGroup[x.payer] || 0) + amount;
+    } else {
+      paidPartial[x.payer] = (paidPartial[x.payer] || 0) + amount;
+    }
     if (participants.length === 0) return;
 
     // Chỉ chia theo tỉ lệ số người trong gia đình khi khoản chi được check CHO ĐỦ
@@ -485,6 +495,8 @@ function renderBalances() {
   const balances = names.map(name => ({
     name,
     paid: paid[name] || 0,
+    paidFullGroup: paidFullGroup[name] || 0,
+    paidPartial: paidPartial[name] || 0,
     owed: owed[name] || 0,
     balance: (paid[name] || 0) - (owed[name] || 0),
   }));
@@ -505,6 +517,10 @@ function renderPaidPerMember(balances) {
     card.innerHTML = `
       <span class="paid-name">${escapeHtml(b.name)}</span>
       <span class="paid-amount">${fmtMoney(b.paid)}</span>
+      <span class="paid-split">
+        <span class="paid-split-item">chung ${fmtMoney(b.paidFullGroup)}</span>
+        <span class="paid-split-item">riêng ${fmtMoney(b.paidPartial)}</span>
+      </span>
     `;
     container.appendChild(card);
   });
