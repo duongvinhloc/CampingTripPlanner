@@ -503,7 +503,64 @@ function renderBalances() {
 
   renderPaidPerMember(balances);
   renderBalanceBreakdown(balances);
+  renderSettlementDetail();
   renderSettlements(balances);
+}
+
+// Nợ "thô" giữa từng cặp người, tính trực tiếp từ mỗi khoản chi: ai nợ ai và bao nhiêu,
+// CHƯA gộp/tối giản qua nhiều người (khác với computeSettlements ở dưới).
+function computePairwiseDebts() {
+  const owedTo = {}; // owedTo[người nợ][người được trả] = số tiền
+  expenses.forEach(x => {
+    const amount = Number(x.amount) || 0;
+    const participants = participantsOf(x);
+    if (participants.length === 0) return;
+    const isFull = isFullGroupExpense(x);
+    const totalPeople = isFull ? participants.reduce((sum, p) => sum + familySizeOf(p), 0) : 0;
+    participants.forEach(p => {
+      if (p === x.payer) return;
+      const share = isFull
+        ? (totalPeople > 0 ? amount * familySizeOf(p) / totalPeople : amount / participants.length)
+        : amount / participants.length;
+      if (!owedTo[p]) owedTo[p] = {};
+      owedTo[p][x.payer] = (owedTo[p][x.payer] || 0) + share;
+    });
+  });
+
+  const pairs = [];
+  const seenPairs = new Set();
+  Object.keys(owedTo).forEach(a => {
+    Object.keys(owedTo[a]).forEach(b => {
+      const key = [a, b].sort().join('|');
+      if (seenPairs.has(key)) return;
+      seenPairs.add(key);
+      const aOwesB = owedTo[a][b] || 0;
+      const bOwesA = (owedTo[b] && owedTo[b][a]) || 0;
+      const net = aOwesB - bOwesA;
+      if (net > 0.5) pairs.push({ from: a, to: b, amount: net });
+      else if (net < -0.5) pairs.push({ from: b, to: a, amount: -net });
+    });
+  });
+  return pairs.sort((x, y) => y.amount - x.amount);
+}
+
+function renderSettlementDetail() {
+  const pairs = computePairwiseDebts();
+  const list = document.getElementById('settlement-detail-list');
+  const empty = document.getElementById('settlement-detail-empty');
+  list.innerHTML = '';
+  empty.hidden = pairs.length > 0;
+  pairs.forEach(p => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <span class="settle-name settle-from">${escapeHtml(p.from)}</span>
+      <span class="settle-arrow">➜</span>
+      <span class="settle-amount">${fmtMoney(p.amount)}</span>
+      <span class="settle-arrow">➜</span>
+      <span class="settle-name settle-to">${escapeHtml(p.to)}</span>
+    `;
+    list.appendChild(li);
+  });
 }
 
 // Lưới nổi bật: mỗi người đã trả bao nhiêu (sắp xếp từ trả nhiều nhất đến ít nhất).
