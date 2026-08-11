@@ -92,6 +92,7 @@ async function loadAll() {
     renderExpensePayerOptions();
     renderExpenseParticipantOptions();
     renderExpenses();
+    renderExpenseBreakdown();
     renderBalances();
     setStatus('Đã cập nhật ' + new Date().toLocaleTimeString('vi-VN'));
   } catch (err) {
@@ -112,7 +113,30 @@ function renderMembers() {
   empty.hidden = members.length > 0;
   members.forEach(m => {
     const li = document.createElement('li');
-    li.innerHTML = `<span>${escapeHtml(m.name)}</span>`;
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'member-name';
+    nameSpan.textContent = m.name;
+    li.appendChild(nameSpan);
+
+    const sizeLabel = document.createElement('label');
+    sizeLabel.className = 'family-size-field';
+    sizeLabel.appendChild(document.createTextNode('Số người: '));
+    const sizeInput = document.createElement('input');
+    sizeInput.type = 'number';
+    sizeInput.min = '1';
+    sizeInput.step = '1';
+    sizeInput.className = 'family-size-input';
+    sizeInput.title = 'Số người trong gia đình mà thành viên này đại diện (dùng khi chia tiền theo tỉ lệ)';
+    sizeInput.value = familySizeOf(m.name);
+    sizeInput.addEventListener('change', async () => {
+      const val = Math.max(1, parseInt(sizeInput.value, 10) || 1);
+      sizeInput.value = val;
+      syncVersionFrom_(await api.update('Members', m.id, { familySize: val }));
+      await loadAll();
+    });
+    sizeLabel.appendChild(sizeInput);
+    li.appendChild(sizeLabel);
+
     const delBtn = document.createElement('button');
     delBtn.textContent = 'Xoá';
     delBtn.className = 'row-delete';
@@ -129,15 +153,25 @@ function renderMembers() {
 document.getElementById('member-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const nameInput = document.getElementById('member-name');
+  const familySizeInput = document.getElementById('member-family-size');
   const name = nameInput.value.trim();
   if (!name) return;
-  syncVersionFrom_(await api.add('Members', { name }));
+  const familySize = Math.max(1, parseInt(familySizeInput.value, 10) || 1);
+  syncVersionFrom_(await api.add('Members', { name, familySize }));
   nameInput.value = '';
+  familySizeInput.value = '';
   await loadAll();
 });
 
 function memberOptionsHtml() {
   return members.map(m => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`).join('');
+}
+
+// Số người mỗi thành viên đại diện (gia đình 2 người, 3 người, ...). Mặc định 1 nếu chưa khai báo.
+function familySizeOf(name) {
+  const m = members.find(mm => mm.name === name);
+  const n = m ? parseInt(m.familySize, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 // ---------- Tasks ----------
@@ -285,9 +319,42 @@ function renderExpenseParticipantOptions() {
     cb.value = m.name;
     cb.checked = true;
     label.appendChild(cb);
-    label.appendChild(document.createTextNode(m.name));
+    label.appendChild(document.createTextNode(`${m.name} (${familySizeOf(m.name)} người)`));
     container.appendChild(label);
   });
+}
+
+// Khoản chi mới nhập được lưu ở cuối danh sách -> id (mốc thời gian) lớn hơn.
+// Hiển thị mới nhất lên trên cho dễ theo dõi.
+function expensesNewestFirst() {
+  return [...expenses].sort((a, b) => Number(b.id) - Number(a.id));
+}
+
+function participantsOf(x) {
+  return String(x.participants || '').split(',').map(s => s.trim()).filter(Boolean);
+}
+
+// Chia cho ĐỦ hết thành viên -> chia theo tỉ lệ gia đình (chia đều cả nhóm theo đầu người).
+// Chỉ chọn một phần thành viên -> khoản chi riêng, chia đều cho những người được chọn.
+function isFullGroupExpense(x) {
+  const participants = participantsOf(x);
+  return members.length > 0 &&
+    participants.length === members.length &&
+    members.every(m => participants.includes(m.name));
+}
+
+// Các khoản chia riêng mà một người tham gia (nhưng không phải người trả), gộp theo
+// tên người đã trả — để biết cụ thể nợ của AI, không chỉ là tên khoản chi.
+function partialSharesOf(name) {
+  const totals = {};
+  expensesNewestFirst()
+    .filter(x => !isFullGroupExpense(x))
+    .filter(x => participantsOf(x).includes(name) && x.payer !== name)
+    .forEach(x => {
+      const share = (Number(x.amount) || 0) / participantsOf(x).length;
+      totals[x.payer] = (totals[x.payer] || 0) + share;
+    });
+  return Object.entries(totals).map(([payer, share]) => ({ payer, share }));
 }
 
 function renderExpenses() {
@@ -295,7 +362,7 @@ function renderExpenses() {
   const empty = document.getElementById('expense-empty');
   tbody.innerHTML = '';
   empty.hidden = expenses.length > 0;
-  expenses.forEach(x => {
+  expensesNewestFirst().forEach(x => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td data-label="Khoản chi">${escapeHtml(x.description)}</td>
@@ -341,6 +408,48 @@ document.getElementById('expense-form').addEventListener('submit', async (e) => 
   await loadAll();
 });
 
+// Tổng số tiền các khoản chia ĐỦ cả nhóm + mức chia trung bình mỗi đầu người (theo tỉ lệ gia đình).
+// Dùng chung cho cả phần tổng kết và phần liệt kê số dư (renderBalanceBreakdown).
+function fullGroupStats() {
+  const fullGroupExpenses = expenses.filter(isFullGroupExpense);
+  const totalFullGroupAmount = fullGroupExpenses.reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+  const totalIndividuals = members.reduce((sum, m) => sum + familySizeOf(m.name), 0);
+  const avgPerPerson = totalIndividuals > 0 ? totalFullGroupAmount / totalIndividuals : 0;
+  return { fullGroupExpenses, totalFullGroupAmount, totalIndividuals, avgPerPerson };
+}
+
+// ---------- Tổng kết chia tiền (chia đều cả nhóm vs. chia riêng) ----------
+function renderExpenseBreakdown() {
+  const totalAmount = expenses.reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+  document.getElementById('expense-total').textContent = fmtMoney(totalAmount);
+
+  const { fullGroupExpenses, totalIndividuals, avgPerPerson } = fullGroupStats();
+  const partialExpenses = expensesNewestFirst().filter(x => !isFullGroupExpense(x));
+
+  const avgLine = document.getElementById('full-group-avg-tile');
+  avgLine.hidden = fullGroupExpenses.length === 0 || totalIndividuals === 0;
+  document.getElementById('full-group-people-count').textContent = totalIndividuals;
+  document.getElementById('full-group-avg').textContent = fmtMoney(avgPerPerson);
+
+  const tbody = document.getElementById('partial-expense-tbody');
+  const empty = document.getElementById('partial-expense-empty');
+  tbody.innerHTML = '';
+  empty.hidden = partialExpenses.length > 0;
+  partialExpenses.forEach(x => {
+    const participants = participantsOf(x);
+    const share = participants.length > 0 ? (Number(x.amount) || 0) / participants.length : 0;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td data-label="Khoản chi">${escapeHtml(x.description)}</td>
+      <td data-label="Số tiền">${fmtMoney(x.amount)}</td>
+      <td data-label="Người trả">${escapeHtml(x.payer)}</td>
+      <td data-label="Chia cho">${escapeHtml(x.participants)}</td>
+      <td data-label="Mỗi người">${fmtMoney(share)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
 // ---------- Balances & Settlement ----------
 function renderBalances() {
   const paid = {};
@@ -349,15 +458,27 @@ function renderBalances() {
 
   expenses.forEach(x => {
     const amount = Number(x.amount) || 0;
-    const participants = String(x.participants || '').split(',').map(s => s.trim()).filter(Boolean);
+    const participants = participantsOf(x);
     if (paid[x.payer] === undefined) paid[x.payer] = 0;
     paid[x.payer] += amount;
     if (participants.length === 0) return;
-    const share = amount / participants.length;
-    participants.forEach(p => {
-      if (owed[p] === undefined) owed[p] = 0;
-      owed[p] += share;
-    });
+
+    // Chỉ chia theo tỉ lệ số người trong gia đình khi khoản chi được check CHO ĐỦ
+    // tất cả thành viên (chia đều cả nhóm). Nếu chỉ check một phần thành viên, chia đều
+    // cho riêng những người đó (xem thêm bảng "Khoản chia riêng").
+    if (isFullGroupExpense(x)) {
+      const totalPeople = participants.reduce((sum, p) => sum + familySizeOf(p), 0);
+      participants.forEach(p => {
+        if (owed[p] === undefined) owed[p] = 0;
+        owed[p] += totalPeople > 0 ? amount * familySizeOf(p) / totalPeople : amount / participants.length;
+      });
+    } else {
+      const share = amount / participants.length;
+      participants.forEach(p => {
+        if (owed[p] === undefined) owed[p] = 0;
+        owed[p] += share;
+      });
+    }
   });
 
   const names = Array.from(new Set([...members.map(m => m.name), ...Object.keys(paid), ...Object.keys(owed)]));
@@ -368,25 +489,29 @@ function renderBalances() {
     balance: (paid[name] || 0) - (owed[name] || 0),
   }));
 
-  const tbody = document.getElementById('balance-tbody');
-  tbody.innerHTML = '';
-  balances.forEach(b => {
-    const tr = document.createElement('tr');
-    const cls = b.balance > 0.5 ? 'balance-positive' : (b.balance < -0.5 ? 'balance-negative' : '');
-    tr.innerHTML = `
-      <td data-label="Thành viên">${escapeHtml(b.name)}</td>
-      <td data-label="Đã trả">${fmtMoney(b.paid)}</td>
-      <td data-label="Phải chịu">${fmtMoney(b.owed)}</td>
-      <td class="${cls}" data-label="Số dư">${b.balance >= 0 ? '+' : ''}${fmtMoney(b.balance)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-
+  renderPaidPerMember(balances);
+  renderBalanceBreakdown(balances);
   renderSettlements(balances);
 }
 
-function renderSettlements(balances) {
-  // Thuật toán tham lam: người nợ nhiều nhất trả cho người được nợ nhiều nhất, lặp lại.
+// Lưới nổi bật: mỗi người đã trả bao nhiêu (sắp xếp từ trả nhiều nhất đến ít nhất).
+function renderPaidPerMember(balances) {
+  const container = document.getElementById('paid-per-member');
+  container.innerHTML = '';
+  const sorted = [...balances].sort((a, b) => b.paid - a.paid);
+  sorted.forEach(b => {
+    const card = document.createElement('div');
+    card.className = 'paid-card' + (b.paid > 0 ? ' paid-card-active' : '');
+    card.innerHTML = `
+      <span class="paid-name">${escapeHtml(b.name)}</span>
+      <span class="paid-amount">${fmtMoney(b.paid)}</span>
+    `;
+    container.appendChild(card);
+  });
+}
+
+// Thuật toán tham lam: người nợ nhiều nhất trả cho người được nợ nhiều nhất, lặp lại.
+function computeSettlements(balances) {
   const debtors = balances.filter(b => b.balance < -0.5).map(b => ({ name: b.name, amount: -b.balance })).sort((a, b) => b.amount - a.amount);
   const creditors = balances.filter(b => b.balance > 0.5).map(b => ({ name: b.name, amount: b.balance })).sort((a, b) => b.amount - a.amount);
 
@@ -400,14 +525,93 @@ function renderSettlements(balances) {
     if (debtors[i].amount < 0.5) i++;
     if (creditors[j].amount < 0.5) j++;
   }
+  return settlements;
+}
 
+// Mỗi người: dòng chính là công thức chia đều cả nhóm (mức chia x số người trong gia đình - đã trả);
+// nếu người đó còn có khoản chia riêng, thêm 1 dòng phụ bên dưới cộng/trừ khoản đó vào ra tổng cuối.
+// Số tiền đã trả mỗi người đã hiển thị riêng ở lưới "paid-per-member" phía trên.
+function renderBalanceBreakdown(balances) {
+  const container = document.getElementById('balance-breakdown');
+  const { totalFullGroupAmount, avgPerPerson } = fullGroupStats();
+  const html = [];
+
+  // netToPay = owed - paid: dương = còn phải trả (nợ), âm = đã trả dư (được nhận lại).
+  const resultOf = (netToPay) => ({
+    cls: netToPay > 0.5 ? 'balance-negative' : (netToPay < -0.5 ? 'balance-positive' : 'balance-even'),
+    label: netToPay > 0.5 ? 'còn phải trả' : (netToPay < -0.5 ? 'được nhận lại' : 'đã huề'),
+  });
+
+  balances.forEach(b => {
+    const familySize = familySizeOf(b.name);
+    const fullGroupOwed = avgPerPerson * familySize;
+    const partialOwed = b.owed - fullGroupOwed;
+    const netToPay = b.owed - b.paid;
+
+    if (totalFullGroupAmount > 0) {
+      // Dòng chính: chỉ tính theo phần chia đều cả nhóm, CHƯA gồm khoản chia riêng.
+      const baseNetToPay = fullGroupOwed - b.paid;
+      const base = resultOf(baseNetToPay);
+      html.push(`
+        <div class="balance-row">
+          <span class="balance-row-name">${escapeHtml(b.name)}</span>
+          <span class="balance-row-formula">${fmtMoney(avgPerPerson)} × ${familySize} người − đã trả ${fmtMoney(b.paid)}</span>
+          <span class="balance-row-result ${base.cls}">${base.label} ${fmtMoney(Math.abs(baseNetToPay))}</span>
+        </div>
+      `);
+
+      // Dòng phụ: khoản chia riêng cộng/trừ thêm vào số dư ở trên, ra tổng cuối cùng.
+      // Mô tả rõ bằng chữ (thay vì chỉ dấu +/-) và liệt kê tên khoản chi riêng liên quan,
+      // để biết khoản đó là của khoản chi nào, không chỉ là một số tiền trừu tượng.
+      if (Math.abs(partialOwed) > 0.5) {
+        const total = resultOf(netToPay);
+        const partialLabel = partialOwed > 0 ? 'chịu thêm khoản chia riêng' : 'được giảm nhờ khoản chia riêng';
+        const owedWord = partialOwed > 0 ? 'nợ' : 'được giảm';
+        const breakdown = partialSharesOf(b.name)
+          .map(s => `${owedWord} ${escapeHtml(s.payer)} ${fmtMoney(s.share)}`)
+          .join(' + ');
+        html.push(`
+          <div class="balance-row balance-row-adjust">
+            <span class="balance-row-name"></span>
+            <span class="balance-row-formula">
+              ${partialLabel} ${fmtMoney(Math.abs(partialOwed))}
+              ${breakdown ? `<span class="balance-row-source">(${breakdown})</span>` : ''}
+            </span>
+            <span class="balance-row-result ${total.cls}">tổng ${total.label} ${fmtMoney(Math.abs(netToPay))}</span>
+          </div>
+        `);
+      }
+    } else {
+      // Không có khoản nào chia đều cả nhóm — tất cả đều là chia riêng.
+      const total = resultOf(netToPay);
+      html.push(`
+        <div class="balance-row">
+          <span class="balance-row-name">${escapeHtml(b.name)}</span>
+          <span class="balance-row-formula">chia riêng ${fmtMoney(b.owed)} − đã trả ${fmtMoney(b.paid)}</span>
+          <span class="balance-row-result ${total.cls}">${total.label} ${fmtMoney(Math.abs(netToPay))}</span>
+        </div>
+      `);
+    }
+  });
+
+  container.innerHTML = html.join('');
+}
+
+function renderSettlements(balances) {
+  const settlements = computeSettlements(balances);
   const list = document.getElementById('settlement-list');
   const empty = document.getElementById('settlement-empty');
   list.innerHTML = '';
   empty.hidden = settlements.length > 0;
   settlements.forEach(s => {
     const li = document.createElement('li');
-    li.textContent = `${s.from} → trả ${fmtMoney(s.amount)} cho ${s.to}`;
+    li.innerHTML = `
+      <span class="settle-name settle-from">${escapeHtml(s.from)}</span>
+      <span class="settle-arrow">➜</span>
+      <span class="settle-amount">${fmtMoney(s.amount)}</span>
+      <span class="settle-arrow">➜</span>
+      <span class="settle-name settle-to">${escapeHtml(s.to)}</span>
+    `;
     list.appendChild(li);
   });
 }
