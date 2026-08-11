@@ -343,16 +343,21 @@ function isFullGroupExpense(x) {
     members.every(m => participants.includes(m.name));
 }
 
-// Các khoản chia riêng mà một người tham gia (nhưng không phải người trả), gộp theo
-// tên người đã trả — để biết cụ thể nợ của AI, không chỉ là tên khoản chi.
+const SELF_PAID_KEY = '__self__';
+
+// Các khoản chia riêng mà một người tham gia, gộp theo tên người đã trả — để biết cụ thể
+// nợ của AI, không chỉ là tên khoản chi. Khoản mà chính người này tự trả (payer === name)
+// vẫn phải tính vào (đánh dấu SELF_PAID_KEY) để tổng cộng khớp với số hiển thị ở dòng chính
+// — phần đó không nợ ai, chỉ là tự chi cho phần của mình.
 function partialSharesOf(name) {
   const totals = {};
   expensesNewestFirst()
     .filter(x => !isFullGroupExpense(x))
-    .filter(x => participantsOf(x).includes(name) && x.payer !== name)
+    .filter(x => participantsOf(x).includes(name))
     .forEach(x => {
       const share = (Number(x.amount) || 0) / participantsOf(x).length;
-      totals[x.payer] = (totals[x.payer] || 0) + share;
+      const key = x.payer === name ? SELF_PAID_KEY : x.payer;
+      totals[key] = (totals[key] || 0) + share;
     });
   return Object.entries(totals).map(([payer, share]) => ({ payer, share }));
 }
@@ -508,9 +513,11 @@ function renderBalances() {
 }
 
 // Nợ "thô" giữa từng cặp người, tính trực tiếp từ mỗi khoản chi: ai nợ ai và bao nhiêu,
-// CHƯA gộp/tối giản qua nhiều người (khác với computeSettlements ở dưới).
+// CHƯA gộp/tối giản qua nhiều người (khác với computeSettlements ở dưới). Giữ luôn danh sách
+// khoản chi đã cộng vào (owedItems) để hiển thị công thức tính ra số tiền đó.
 function computePairwiseDebts() {
   const owedTo = {}; // owedTo[người nợ][người được trả] = số tiền
+  const owedItems = {}; // owedItems[người nợ][người được trả] = [{ description, amount }]
   expenses.forEach(x => {
     const amount = Number(x.amount) || 0;
     const participants = participantsOf(x);
@@ -524,6 +531,9 @@ function computePairwiseDebts() {
         : amount / participants.length;
       if (!owedTo[p]) owedTo[p] = {};
       owedTo[p][x.payer] = (owedTo[p][x.payer] || 0) + share;
+      if (!owedItems[p]) owedItems[p] = {};
+      if (!owedItems[p][x.payer]) owedItems[p][x.payer] = [];
+      owedItems[p][x.payer].push({ description: x.description, amount: share });
     });
   });
 
@@ -536,12 +546,24 @@ function computePairwiseDebts() {
       seenPairs.add(key);
       const aOwesB = owedTo[a][b] || 0;
       const bOwesA = (owedTo[b] && owedTo[b][a]) || 0;
+      const itemsAB = (owedItems[a] && owedItems[a][b]) || [];
+      const itemsBA = (owedItems[b] && owedItems[b][a]) || [];
       const net = aOwesB - bOwesA;
-      if (net > 0.5) pairs.push({ from: a, to: b, amount: net });
-      else if (net < -0.5) pairs.push({ from: b, to: a, amount: -net });
+      if (net > 0.5) pairs.push({ from: a, to: b, amount: net, items: itemsAB, counterItems: itemsBA });
+      else if (net < -0.5) pairs.push({ from: b, to: a, amount: -net, items: itemsBA, counterItems: itemsAB });
     });
   });
   return pairs.sort((x, y) => y.amount - x.amount);
+}
+
+// Ghép danh sách khoản chi thành công thức dễ đọc, VD:
+// "Đổ xăng ¥6,000 + Ăn tối ¥6,000 − (Ăn sáng ¥2,000)" — phần trừ là khoản chi riêng
+// mà "to" lại nợ ngược lại "from", đã bù trừ vào số tiền cuối cùng.
+function formatDebtFormula(items, counterItems) {
+  const plus = items.map(i => `${escapeHtml(i.description)} ${fmtMoney(i.amount)}`).join(' + ');
+  if (counterItems.length === 0) return plus;
+  const minus = counterItems.map(i => `${escapeHtml(i.description)} ${fmtMoney(i.amount)}`).join(' + ');
+  return `${plus} − (${minus})`;
 }
 
 function renderSettlementDetail() {
@@ -553,11 +575,14 @@ function renderSettlementDetail() {
   pairs.forEach(p => {
     const li = document.createElement('li');
     li.innerHTML = `
-      <span class="settle-name settle-from">${escapeHtml(p.from)}</span>
-      <span class="settle-arrow">➜</span>
-      <span class="settle-amount">${fmtMoney(p.amount)}</span>
-      <span class="settle-arrow">➜</span>
-      <span class="settle-name settle-to">${escapeHtml(p.to)}</span>
+      <div class="settle-main">
+        <span class="settle-name settle-from">${escapeHtml(p.from)}</span>
+        <span class="settle-arrow">➜</span>
+        <span class="settle-amount">${fmtMoney(p.amount)}</span>
+        <span class="settle-arrow">➜</span>
+        <span class="settle-name settle-to">${escapeHtml(p.to)}</span>
+      </div>
+      <div class="settle-formula">${formatDebtFormula(p.items, p.counterItems)}</div>
     `;
     list.appendChild(li);
   });
@@ -584,6 +609,10 @@ function renderPaidPerMember(balances) {
 }
 
 // Thuật toán tham lam: người nợ nhiều nhất trả cho người được nợ nhiều nhất, lặp lại.
+// Mỗi giao dịch = min(số dư ròng còn lại của người trả, số dư ròng còn lại của người nhận);
+// fromRemaining/toRemaining được giữ lại (số dư TRƯỚC giao dịch này) để hiển thị công thức
+// kiểm chứng ở renderSettlements — không phải là số dư ròng ban đầu nếu người đó đã
+// xuất hiện ở dòng trước.
 function computeSettlements(balances) {
   const debtors = balances.filter(b => b.balance < -0.5).map(b => ({ name: b.name, amount: -b.balance })).sort((a, b) => b.amount - a.amount);
   const creditors = balances.filter(b => b.balance > 0.5).map(b => ({ name: b.name, amount: b.balance })).sort((a, b) => b.amount - a.amount);
@@ -591,8 +620,10 @@ function computeSettlements(balances) {
   const settlements = [];
   let i = 0, j = 0;
   while (i < debtors.length && j < creditors.length) {
-    const pay = Math.min(debtors[i].amount, creditors[j].amount);
-    settlements.push({ from: debtors[i].name, to: creditors[j].name, amount: pay });
+    const fromRemaining = debtors[i].amount;
+    const toRemaining = creditors[j].amount;
+    const pay = Math.min(fromRemaining, toRemaining);
+    settlements.push({ from: debtors[i].name, to: creditors[j].name, amount: pay, fromRemaining, toRemaining });
     debtors[i].amount -= pay;
     creditors[j].amount -= pay;
     if (debtors[i].amount < 0.5) i++;
@@ -641,7 +672,9 @@ function renderBalanceBreakdown(balances) {
         const partialLabel = partialOwed > 0 ? 'chịu thêm khoản chia riêng' : 'được giảm nhờ khoản chia riêng';
         const owedWord = partialOwed > 0 ? 'nợ' : 'được giảm';
         const breakdown = partialSharesOf(b.name)
-          .map(s => `${owedWord} ${escapeHtml(s.payer)} ${fmtMoney(s.share)}`)
+          .map(s => s.payer === SELF_PAID_KEY
+            ? `tự chi ${fmtMoney(s.share)}`
+            : `${owedWord} ${escapeHtml(s.payer)} ${fmtMoney(s.share)}`)
           .join(' + ');
         html.push(`
           <div class="balance-row balance-row-adjust">
@@ -679,11 +712,14 @@ function renderSettlements(balances) {
   settlements.forEach(s => {
     const li = document.createElement('li');
     li.innerHTML = `
-      <span class="settle-name settle-from">${escapeHtml(s.from)}</span>
-      <span class="settle-arrow">➜</span>
-      <span class="settle-amount">${fmtMoney(s.amount)}</span>
-      <span class="settle-arrow">➜</span>
-      <span class="settle-name settle-to">${escapeHtml(s.to)}</span>
+      <div class="settle-main">
+        <span class="settle-name settle-from">${escapeHtml(s.from)}</span>
+        <span class="settle-arrow">➜</span>
+        <span class="settle-amount">${fmtMoney(s.amount)}</span>
+        <span class="settle-arrow">➜</span>
+        <span class="settle-name settle-to">${escapeHtml(s.to)}</span>
+      </div>
+      <div class="settle-formula">${escapeHtml(s.from)} còn nợ ròng ${fmtMoney(s.fromRemaining)} · ${escapeHtml(s.to)} còn được nhận ròng ${fmtMoney(s.toRemaining)} → trả min(${fmtMoney(s.fromRemaining)}, ${fmtMoney(s.toRemaining)}) = ${fmtMoney(s.amount)}</div>
     `;
     list.appendChild(li);
   });
