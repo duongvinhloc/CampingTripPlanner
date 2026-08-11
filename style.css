@@ -474,10 +474,9 @@ select.status-select {
 #settlement-list { list-style: none; padding: 0; margin: 0; }
 #settlement-list li {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 6px 10px;
+  gap: 6px;
   padding: 16px 18px;
   margin-bottom: 10px;
   border-radius: 12px;
@@ -487,6 +486,14 @@ select.status-select {
   font-size: 1.05rem;
 }
 #settlement-list li:last-child { margin-bottom: 0; }
+#settlement-list .settle-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+}
+#settlement-list .settle-formula { text-align: center; }
 
 .settle-name {
   font-weight: 700;
@@ -500,6 +507,44 @@ select.status-select {
 .settle-arrow {
   color: var(--muted);
   font-weight: 700;
+}
+
+/* Danh sách "chi tiết ai nợ ai" — thông tin phụ, hiển thị nhẹ hơn so với
+   #settlement-list (bản tổng hợp cuối cùng, là phần quan trọng nhất cần nổi bật). */
+.settlement-detail-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+.settlement-detail-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 4px;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.86rem;
+}
+.settlement-detail-list li:last-child { border-bottom: none; }
+.settlement-detail-list .settle-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.settlement-detail-list .settle-name {
+  font-weight: 600;
+  color: var(--text);
+}
+.settlement-detail-list .settle-amount {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.settle-formula {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--muted);
+  padding-left: 2px;
 }
 
 .balance-positive {
