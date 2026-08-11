@@ -413,6 +413,24 @@ document.getElementById('expense-form').addEventListener('submit', async (e) => 
   await loadAll();
 });
 
+// Chia một tổng số tiền nguyên yên cho các "trọng số" (VD: số người mỗi gia đình), đảm bảo
+// tổng các phần chia ra luôn khớp đúng tổng ban đầu — dùng phương pháp phần dư lớn nhất
+// (largest remainder) để không ai bị lệch 1 yên do làm tròn khi hiển thị.
+function splitFairly(total, weights) {
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+  if (totalWeight <= 0) return weights.map(() => 0);
+  const totalInt = Math.round(total);
+  const raw = weights.map(w => totalInt * w / totalWeight);
+  const base = raw.map(r => Math.floor(r));
+  const remainder = totalInt - base.reduce((sum, b) => sum + b, 0);
+  const order = raw
+    .map((r, i) => ({ i, frac: r - base[i] }))
+    .sort((a, b) => b.frac - a.frac);
+  const result = [...base];
+  for (let k = 0; k < remainder; k++) result[order[k].i] += 1;
+  return result;
+}
+
 // Tổng số tiền các khoản chia ĐỦ cả nhóm + mức chia trung bình mỗi đầu người (theo tỉ lệ gia đình).
 // Dùng chung cho cả phần tổng kết và phần liệt kê số dư (renderBalanceBreakdown).
 function fullGroupStats() {
@@ -420,7 +438,15 @@ function fullGroupStats() {
   const totalFullGroupAmount = fullGroupExpenses.reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
   const totalIndividuals = members.reduce((sum, m) => sum + familySizeOf(m.name), 0);
   const avgPerPerson = totalIndividuals > 0 ? totalFullGroupAmount / totalIndividuals : 0;
-  return { fullGroupExpenses, totalFullGroupAmount, totalIndividuals, avgPerPerson };
+
+  // Phần chia đều cả nhóm của từng người, làm tròn nguyên yên và bù phần dư để tổng luôn
+  // khớp totalFullGroupAmount — tránh trường hợp avgPerPerson × familySize lẻ yên khiến
+  // tổng hiển thị của mọi người lệch 1 yên so với tổng thực.
+  const fullGroupOwedByName = {};
+  const shares = splitFairly(totalFullGroupAmount, members.map(m => familySizeOf(m.name)));
+  members.forEach((m, i) => { fullGroupOwedByName[m.name] = shares[i] || 0; });
+
+  return { fullGroupExpenses, totalFullGroupAmount, totalIndividuals, avgPerPerson, fullGroupOwedByName };
 }
 
 // ---------- Tổng kết chia tiền (chia đều cả nhóm vs. chia riêng) ----------
@@ -542,8 +568,8 @@ function computePairwiseDebts() {
       const aOwesB = owedTo[a][b] || 0;
       const bOwesA = (owedTo[b] && owedTo[b][a]) || 0;
       const net = aOwesB - bOwesA;
-      if (net > 0.5) pairs.push({ from: a, to: b, amount: net });
-      else if (net < -0.5) pairs.push({ from: b, to: a, amount: -net });
+      if (net > 0.5) pairs.push({ from: a, to: b, amount: net, rawFrom: aOwesB, rawTo: bOwesA });
+      else if (net < -0.5) pairs.push({ from: b, to: a, amount: -net, rawFrom: bOwesA, rawTo: aOwesB });
     });
   });
   return pairs.sort((x, y) => y.amount - x.amount);
@@ -557,6 +583,7 @@ function renderSettlementDetail() {
   empty.hidden = pairs.length > 0;
   pairs.forEach(p => {
     const li = document.createElement('li');
+    const hasBothWays = p.rawTo > 0.5;
     li.innerHTML = `
       <div class="settle-main">
         <span class="settle-name settle-from">${escapeHtml(p.from)}</span>
@@ -565,6 +592,7 @@ function renderSettlementDetail() {
         <span class="settle-arrow">➜</span>
         <span class="settle-name settle-to">${escapeHtml(p.to)}</span>
       </div>
+      ${hasBothWays ? `<div class="settle-formula">${fmtMoney(p.rawFrom)} − ${fmtMoney(p.rawTo)} = ${fmtMoney(p.amount)}</div>` : ''}
     `;
     list.appendChild(li);
   });
@@ -619,7 +647,7 @@ function computeSettlements(balances) {
 // Số tiền đã trả mỗi người đã hiển thị riêng ở lưới "paid-per-member" phía trên.
 function renderBalanceBreakdown(balances) {
   const container = document.getElementById('balance-breakdown');
-  const { totalFullGroupAmount, avgPerPerson } = fullGroupStats();
+  const { totalFullGroupAmount, avgPerPerson, fullGroupOwedByName } = fullGroupStats();
   const html = [];
 
   // netToPay = owed - paid: dương = còn phải trả (nợ), âm = đã trả dư (được nhận lại).
@@ -630,7 +658,7 @@ function renderBalanceBreakdown(balances) {
 
   balances.forEach(b => {
     const familySize = familySizeOf(b.name);
-    const fullGroupOwed = avgPerPerson * familySize;
+    const fullGroupOwed = fullGroupOwedByName[b.name] ?? (avgPerPerson * familySize);
     const partialOwed = b.owed - fullGroupOwed;
     const netToPay = b.owed - b.paid;
 
@@ -701,7 +729,7 @@ function renderSettlements(balances) {
         <span class="settle-arrow">➜</span>
         <span class="settle-name settle-to">${escapeHtml(s.to)}</span>
       </div>
-      <div class="settle-formula">${escapeHtml(s.from)} còn nợ ròng ${fmtMoney(s.fromRemaining)} · ${escapeHtml(s.to)} còn được nhận ròng ${fmtMoney(s.toRemaining)} → trả min(${fmtMoney(s.fromRemaining)}, ${fmtMoney(s.toRemaining)}) = ${fmtMoney(s.amount)}</div>
+      <div class="settle-formula">Trả ${fmtMoney(s.amount)} = số nhỏ hơn giữa phần ${escapeHtml(s.from)} còn nợ (${fmtMoney(s.fromRemaining)}) và phần ${escapeHtml(s.to)} còn được nhận (${fmtMoney(s.toRemaining)})</div>
     `;
     list.appendChild(li);
   });
