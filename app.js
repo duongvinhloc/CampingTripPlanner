@@ -513,11 +513,9 @@ function renderBalances() {
 }
 
 // Nợ "thô" giữa từng cặp người, tính trực tiếp từ mỗi khoản chi: ai nợ ai và bao nhiêu,
-// CHƯA gộp/tối giản qua nhiều người (khác với computeSettlements ở dưới). Giữ luôn danh sách
-// khoản chi đã cộng vào (owedItems) để hiển thị công thức tính ra số tiền đó.
+// CHƯA gộp/tối giản qua nhiều người (khác với computeSettlements ở dưới).
 function computePairwiseDebts() {
   const owedTo = {}; // owedTo[người nợ][người được trả] = số tiền
-  const owedItems = {}; // owedItems[người nợ][người được trả] = [{ description, amount }]
   expenses.forEach(x => {
     const amount = Number(x.amount) || 0;
     const participants = participantsOf(x);
@@ -531,9 +529,6 @@ function computePairwiseDebts() {
         : amount / participants.length;
       if (!owedTo[p]) owedTo[p] = {};
       owedTo[p][x.payer] = (owedTo[p][x.payer] || 0) + share;
-      if (!owedItems[p]) owedItems[p] = {};
-      if (!owedItems[p][x.payer]) owedItems[p][x.payer] = [];
-      owedItems[p][x.payer].push({ description: x.description, amount: share });
     });
   });
 
@@ -546,24 +541,12 @@ function computePairwiseDebts() {
       seenPairs.add(key);
       const aOwesB = owedTo[a][b] || 0;
       const bOwesA = (owedTo[b] && owedTo[b][a]) || 0;
-      const itemsAB = (owedItems[a] && owedItems[a][b]) || [];
-      const itemsBA = (owedItems[b] && owedItems[b][a]) || [];
       const net = aOwesB - bOwesA;
-      if (net > 0.5) pairs.push({ from: a, to: b, amount: net, items: itemsAB, counterItems: itemsBA });
-      else if (net < -0.5) pairs.push({ from: b, to: a, amount: -net, items: itemsBA, counterItems: itemsAB });
+      if (net > 0.5) pairs.push({ from: a, to: b, amount: net });
+      else if (net < -0.5) pairs.push({ from: b, to: a, amount: -net });
     });
   });
   return pairs.sort((x, y) => y.amount - x.amount);
-}
-
-// Ghép danh sách khoản chi thành công thức dễ đọc, VD:
-// "Đổ xăng ¥6,000 + Ăn tối ¥6,000 − (Ăn sáng ¥2,000)" — phần trừ là khoản chi riêng
-// mà "to" lại nợ ngược lại "from", đã bù trừ vào số tiền cuối cùng.
-function formatDebtFormula(items, counterItems) {
-  const plus = items.map(i => `${escapeHtml(i.description)} ${fmtMoney(i.amount)}`).join(' + ');
-  if (counterItems.length === 0) return plus;
-  const minus = counterItems.map(i => `${escapeHtml(i.description)} ${fmtMoney(i.amount)}`).join(' + ');
-  return `${plus} − (${minus})`;
 }
 
 function renderSettlementDetail() {
@@ -582,7 +565,6 @@ function renderSettlementDetail() {
         <span class="settle-arrow">➜</span>
         <span class="settle-name settle-to">${escapeHtml(p.to)}</span>
       </div>
-      <div class="settle-formula">${formatDebtFormula(p.items, p.counterItems)}</div>
     `;
     list.appendChild(li);
   });
