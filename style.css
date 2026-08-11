@@ -411,6 +411,12 @@ select.status-select {
   letter-spacing: -0.01em;
 }
 
+.stat-split {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 /* ---------- Lưới "mỗi người đã trả" ---------- */
 .paid-grid {
   display: grid;
@@ -446,6 +452,23 @@ select.status-select {
   font-size: 1.15rem;
   font-weight: 700;
   color: var(--primary-dark);
+}
+
+.paid-card .paid-split {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.paid-split-item {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
 }
 
 #settlement-list { list-style: none; padding: 0; margin: 0; }
