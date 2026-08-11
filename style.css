@@ -152,6 +152,15 @@ main { max-width: 920px; margin: 0 auto; padding: 20px 16px 60px; }
   gap: 6px;
 }
 
+.card h3 {
+  margin: 4px 0 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
 .form-row {
   display: flex;
   flex-wrap: wrap;
@@ -321,23 +330,154 @@ select.status-select {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   padding: 12px 4px;
   border-bottom: 1px solid var(--border);
   font-weight: 500;
 }
 .member-list li:last-child { border-bottom: none; }
+.member-name { flex: 1; }
+
+.family-size-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.family-size-input {
+  width: 56px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: -2px 0 0;
+}
+
+.total-line {
+  font-size: 0.92rem;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.total-line strong { color: var(--text); }
+
+/* ---------- Stat tiles (tổng tiền / chia đều mỗi người) ---------- */
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.stat-tile {
+  flex: 1;
+  min-width: 190px;
+  border-radius: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  background: var(--bg-accent);
+}
+
+.stat-tile-total {
+  background: linear-gradient(135deg, var(--primary-soft) 0%, var(--bg-accent) 100%);
+  border-color: var(--primary-light);
+}
+
+.stat-tile-avg {
+  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--bg-accent) 100%);
+  border-color: var(--accent);
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  letter-spacing: -0.01em;
+}
+
+/* ---------- Lưới "mỗi người đã trả" ---------- */
+.paid-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.paid-card {
+  text-align: center;
+  background: var(--bg-accent);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 10px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.paid-card-active {
+  border-color: var(--primary-light);
+  box-shadow: var(--shadow);
+}
+
+.paid-card .paid-name {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.paid-card .paid-amount {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+}
 
 #settlement-list { list-style: none; padding: 0; margin: 0; }
 #settlement-list li {
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  border-radius: 12px;
   background: var(--accent-soft);
-  border-left: 4px solid var(--accent);
-  font-size: 0.95rem;
-  font-weight: 500;
+  border: 2px solid var(--accent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  font-size: 1.05rem;
 }
 #settlement-list li:last-child { margin-bottom: 0; }
+
+.settle-name {
+  font-weight: 700;
+  color: var(--primary-dark);
+}
+.settle-amount {
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+.settle-arrow {
+  color: var(--muted);
+  font-weight: 700;
+}
 
 .balance-positive {
   color: var(--accent);
@@ -346,6 +486,81 @@ select.status-select {
 .balance-negative {
   color: var(--danger);
   font-weight: 700;
+}
+
+.balance-breakdown { display: flex; flex-direction: column; gap: 2px; }
+.balance-line {
+  margin: 0;
+  padding: 7px 0;
+  font-size: 0.92rem;
+  border-bottom: 1px solid var(--border);
+}
+.balance-line:last-child { border-bottom: none; }
+.balance-line strong { color: var(--text); }
+
+.balance-total { font-weight: 600; color: var(--muted); }
+.balance-total strong { color: var(--primary-dark); }
+
+/* Mỗi dòng công thức: tên -- công thức tính -- kết quả (badge nổi bật). */
+.balance-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.balance-row:last-of-type { border-bottom: none; }
+
+/* Dòng phụ (khoản chia riêng cộng/trừ thêm) — thụt vào dưới dòng chính của người đó. */
+.balance-row-adjust {
+  padding-top: 0;
+  padding-left: 76px;
+  border-bottom: 1px dashed var(--border);
+}
+.balance-row-adjust .balance-row-formula {
+  font-size: 0.8rem;
+  font-style: italic;
+}
+.balance-row-source {
+  display: inline;
+  font-style: normal;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+.balance-row-adjust .balance-row-result {
+  font-size: 0.78rem;
+  padding: 4px 10px;
+}
+
+.balance-row-name {
+  font-weight: 700;
+  min-width: 64px;
+}
+
+.balance-row-formula {
+  flex: 1;
+  min-width: 160px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-row-result {
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.balance-row-result.balance-negative { background: var(--danger-soft); color: var(--danger); }
+.balance-row-result.balance-positive { background: var(--done-soft); color: #0f9d6f; }
+.balance-row-result.balance-even { background: var(--bg-accent); color: var(--muted); }
+
+@media (prefers-color-scheme: dark) {
+  .balance-row-result.balance-positive { color: var(--accent); }
 }
 
 /* ---------- Mobile (iPhone / màn hình nhỏ) ---------- */
@@ -372,11 +587,14 @@ select.status-select {
   .filter-bar { flex-direction: column; align-items: stretch; }
   .filter-bar select { min-width: 0; width: 100%; }
 
+  .balance-row-result { margin-left: 0; }
+  .balance-row-adjust { padding-left: 16px; }
+
   /* Bảng chuyển thành danh sách thẻ, tránh phải kéo ngang trên màn hình nhỏ */
   table thead { display: none; }
   table, tbody, tr, td { display: block; width: 100%; }
 
-  #task-table tr, #expense-table tr, #balance-table tr {
+  #task-table tr, #expense-table tr, #partial-expense-table tr {
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 4px 12px;
@@ -384,9 +602,9 @@ select.status-select {
   }
   #task-table tbody tr:last-child,
   #expense-table tbody tr:last-child,
-  #balance-table tbody tr:last-child { margin-bottom: 0; }
+  #partial-expense-table tbody tr:last-child { margin-bottom: 0; }
 
-  #task-table td, #expense-table td, #balance-table td {
+  #task-table td, #expense-table td, #partial-expense-table td {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -395,12 +613,12 @@ select.status-select {
     border-bottom: 1px solid var(--border);
     text-align: right;
   }
-  #task-table td:last-child, #expense-table td:last-child, #balance-table td:last-child {
+  #task-table td:last-child, #expense-table td:last-child, #partial-expense-table td:last-child {
     border-bottom: none;
   }
   #task-table td:empty, #expense-table td:empty { padding: 6px 0; justify-content: flex-end; }
 
-  #task-table td::before, #expense-table td::before, #balance-table td::before {
+  #task-table td::before, #expense-table td::before, #partial-expense-table td::before {
     content: attr(data-label);
     font-weight: 700;
     font-size: 0.72rem;
