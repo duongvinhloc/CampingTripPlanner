@@ -2,7 +2,9 @@
 
 // Apps Script /exec redirect qua 1 URL echo tạm; dưới tải (nhiều request cùng lúc) URL đó
 // đôi khi 404 và trả về trang lỗi HTML thay vì JSON. Lỗi này chỉ là tạm thời nên retry là đủ.
-async function fetchJson_(url, options, retries = 2) {
+// Backoff tăng dần (800ms, 1600ms, 3200ms, 6400ms) vì đợt 404 này đôi khi kéo dài vài giây,
+// thử lại quá nhanh (như 400ms/800ms trước đây) vẫn rơi vào đúng lúc URL echo còn lỗi.
+async function fetchJson_(url, options, retries = 4) {
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetch(url, options);
@@ -16,7 +18,7 @@ async function fetchJson_(url, options, retries = 2) {
       return json;
     } catch (err) {
       if (attempt >= retries) throw err;
-      await new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+      await new Promise(r => setTimeout(r, 800 * Math.pow(2, attempt)));
     }
   }
 }
