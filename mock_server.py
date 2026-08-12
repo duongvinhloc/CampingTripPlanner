@@ -25,15 +25,11 @@ if sys.stdout.encoding.lower() != "utf-8":
 PORT = 5500
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
-# Mật khẩu chung của cả nhóm — đổi giá trị này (và giá trị APP_PASSWORD tương ứng
-# trong apps-script/Code.gs khi deploy thật) thành mật khẩu riêng của nhóm bạn.
-APP_PASSWORD = "camp2026"
-
 DB = {
     "Members": [
-        {"id": "1", "name": "Ngọc"},
-        {"id": "2", "name": "Lu"},
-        {"id": "3", "name": "Ni"},
+        {"id": "1", "name": "Ngọc", "familySize": 2},
+        {"id": "2", "name": "Lu", "familySize": 3},
+        {"id": "3", "name": "Ni", "familySize": 1},
     ],
     "Tasks": [
         {"id": "101", "group": "Lều & ngủ nghỉ", "task": "Mang lều", "assignee": "Ngọc", "quantity": 1, "status": "done", "note": "lều 4 người"},
@@ -43,11 +39,11 @@ DB = {
     ],
     "Expenses": [
         {"id": "201", "date": "2026-08-10", "description": "Đổ xăng", "payer": "Ngọc",
-         "amount": 300000, "participants": "Ngọc, Lu, Ni"},
+         "amount": 300000, "participants": "Ngọc, Lu, Ni", "note": ""},
         {"id": "202", "date": "2026-08-10", "description": "Mua đồ ăn, nước uống", "payer": "Lu",
-         "amount": 550000, "participants": "Ngọc, Lu, Ni"},
+         "amount": 550000, "participants": "Ngọc, Lu, Ni", "note": "nhớ giữ hoá đơn"},
         {"id": "203", "date": "2026-08-11", "description": "Vé khu cắm trại", "payer": "Ni",
-         "amount": 240000, "participants": "Ngọc, Lu, Ni"},
+         "amount": 240000, "participants": "Ngọc, Lu, Ni", "note": ""},
     ],
 }
 
@@ -77,9 +73,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
         if "sheet" in params:
-            if params.get("password", [""])[0] != APP_PASSWORD:
-                self._send_json({"error": "Unauthorized"}, status=401)
-                return
             sheet = params["sheet"][0]
             if sheet not in DB:
                 self._send_json({"error": f"Unknown sheet: {sheet}"})
@@ -95,10 +88,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             body = json.loads(raw)
         except json.JSONDecodeError:
             self._send_json({"error": "Invalid JSON"})
-            return
-
-        if body.get("password") != APP_PASSWORD:
-            self._send_json({"error": "Unauthorized"}, status=401)
             return
 
         sheet = body.get("sheet")
