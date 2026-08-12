@@ -534,7 +534,6 @@ function renderBalances() {
 
   renderPaidPerMember(balances);
   renderBalanceBreakdown(balances);
-  renderSettlementDetail();
   renderSettlements(balances);
 }
 
@@ -573,29 +572,6 @@ function computePairwiseDebts() {
     });
   });
   return pairs.sort((x, y) => y.amount - x.amount);
-}
-
-function renderSettlementDetail() {
-  const pairs = computePairwiseDebts();
-  const list = document.getElementById('settlement-detail-list');
-  const empty = document.getElementById('settlement-detail-empty');
-  list.innerHTML = '';
-  empty.hidden = pairs.length > 0;
-  pairs.forEach(p => {
-    const li = document.createElement('li');
-    const hasBothWays = p.rawTo > 0.5;
-    li.innerHTML = `
-      <div class="settle-main">
-        <span class="settle-name settle-from">${escapeHtml(p.from)}</span>
-        <span class="settle-arrow">➜</span>
-        <span class="settle-amount">${fmtMoney(p.amount)}</span>
-        <span class="settle-arrow">➜</span>
-        <span class="settle-name settle-to">${escapeHtml(p.to)}</span>
-      </div>
-      ${hasBothWays ? `<div class="settle-formula">${fmtMoney(p.rawFrom)} − ${fmtMoney(p.rawTo)} = ${fmtMoney(p.amount)}</div>` : ''}
-    `;
-    list.appendChild(li);
-  });
 }
 
 // Lưới nổi bật: mỗi người đã trả bao nhiêu (sắp xếp từ trả nhiều nhất đến ít nhất).
@@ -648,6 +624,7 @@ function computeSettlements(balances) {
 function renderBalanceBreakdown(balances) {
   const container = document.getElementById('balance-breakdown');
   const { totalFullGroupAmount, avgPerPerson, fullGroupOwedByName } = fullGroupStats();
+  const pairwiseDebts = computePairwiseDebts();
   const html = [];
 
   // netToPay = owed - paid: dương = còn phải trả (nợ), âm = đã trả dư (được nhận lại).
@@ -655,6 +632,24 @@ function renderBalanceBreakdown(balances) {
     cls: netToPay > 0.5 ? 'balance-negative' : (netToPay < -0.5 ? 'balance-positive' : 'balance-even'),
     label: netToPay > 0.5 ? 'còn phải trả' : (netToPay < -0.5 ? 'được nhận lại' : 'đã huề'),
   });
+
+  // Khi số dư của một người là tổng của nhiều khoản nợ với nhiều người khác nhau,
+  // ghi rõ phép cộng từng khoản ra tổng (VD: 1.000 (An) + 3.000 (Bình) = 4.000)
+  // để biết số tiền đó đến từ đâu, không chỉ là một con số duy nhất.
+  const pairwiseFormula = (name, netToPay) => {
+    const pairs = netToPay > 0.5 ? pairwiseDebts.filter(p => p.from === name)
+      : netToPay < -0.5 ? pairwiseDebts.filter(p => p.to === name)
+      : [];
+    if (pairs.length < 2) return '';
+    const otherKey = netToPay > 0.5 ? 'to' : 'from';
+    const terms = pairs.map(p => `${fmtMoney(p.amount)} (${escapeHtml(p[otherKey])})`).join(' + ');
+    return `
+      <div class="balance-row balance-row-pairwise">
+        <span class="balance-row-name"></span>
+        <span class="balance-row-formula"><span class="balance-row-source">${terms}</span> = ${fmtMoney(Math.abs(netToPay))}</span>
+      </div>
+    `;
+  };
 
   balances.forEach(b => {
     const familySize = familySizeOf(b.name);
@@ -697,6 +692,7 @@ function renderBalanceBreakdown(balances) {
           </div>
         `);
       }
+      html.push(pairwiseFormula(b.name, netToPay));
     } else {
       // Không có khoản nào chia đều cả nhóm — tất cả đều là chia riêng.
       const total = resultOf(netToPay);
@@ -707,6 +703,7 @@ function renderBalanceBreakdown(balances) {
           <span class="balance-row-result ${total.cls}">${total.label} ${fmtMoney(Math.abs(netToPay))}</span>
         </div>
       `);
+      html.push(pairwiseFormula(b.name, netToPay));
     }
   });
 
